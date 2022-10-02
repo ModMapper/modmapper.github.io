@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+	<head>
+		<title>한글 자모 분리 목록 생성기</title>
+		<script>
+			function getlist(s) {
+				let arr = [];
+				execute(arr, s, 0);
+				return arr;
+				
+				function execute(arr, s, index) {
+					if(s.length == index) {
+						arr.push(s);
+						return;
+					}
+					execute(arr, s, index + 1);
+					var c = s.substring(index, index + 1);
+					var kr = toCombination(c);
+					if(kr != -1) {
+						let m = s.substring(0, index) + kr + s.substring(index + 1);
+						execute(arr, m, index + kr.length);
+					}
+				}
+			}
+
+			function toCombination(c) {
+				const kr_base = 0xAC00;
+				const kr_last = 0xD79F;
+				const kr_top = 0x1100;
+				const kr_mid = 0x1161;
+				const kr_btm = 0x11A8;
+				
+				let itop, imid, ibtm;
+				let code = c.charCodeAt(0);
+				
+				if((code < kr_base) || (code > kr_last))
+					return -1;
+				
+				code -= kr_base;
+				
+				itop = code / (21 * 28);
+				code = code % (21 * 28);
+				imid = code / 28;
+				ibtm = code % 28;
+				
+				let s = String.fromCharCode(kr_top + itop);
+				if(imid == 0) return s;
+				s += String.fromCharCode(kr_mid + imid);
+				if(ibtm == 0) return s;
+				return s + String.fromCharCode(kr_btm + ibtm);
+			}
+		</script>
+		
+		<script>
+			function onKeyPress() {
+				if(event.charCode == 13)
+					onClick();
+			}
+		
+			function onClick() {
+				let text = document.getElementById("input").value;
+				let result = document.getElementById("result");
+				let list = getlist(text);
+				result.append(list[0]);
+				for(let i = 1; i < list.length; i++) {
+					result.append("\r\n");
+					result.append(list[i]);
+				}
+			}
+		</script>
+		
+		<style>
+			html, body {height: 100%; margin:0}
+			.content {display: flex; flex-direction: column; height:100%; padding: 0 10px;}
+			.menu {display: flex; flex-direction: row; margin: 10px 0;}
+			.menu input {flex: 1; margin-right:10px;}
+			.menu button {min-width: 70px;}
+			#result {flex: 1; margin-bottom:10px;}
+		</style>
+	</head>
+	<body>
+		<div class="content">
+			<div class="menu">
+				<input id="input" type="text" onkeypress="onKeyPress()" />
+				<button onClick="onClick()">생성</button>
+			</div>
+			<textarea id="result" readonly></textarea>
+		</div>
+	</body>
+</html>
