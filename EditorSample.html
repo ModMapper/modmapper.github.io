@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Risu Editor</title>
+    <style>
+        body, html, #editor {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="editor"></div>
+    <!-- Monaco Editor 로더 스크립트 -->
+    <script src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script>
+    <script>
+        require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@latest/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            // 플레이스홀더 정보 정의
+            var placeholders = [
+                {
+                    label: '{{user}}',
+                    regex: /\{\{user\}\}/g,
+                    insertText: '{{user}}',
+                    detail: 'Insert user placeholder',
+                    hover: 'Replaced by user name'
+                },
+                {
+                    label: '{{char}}',
+                    regex: /\{\{char\}\}/g,
+                    insertText: '{{char}}',
+                    detail: 'Insert character placeholder',
+                    hover: 'Replaced by character name'
+                },
+                {
+                    label: '{{img::(name)}}',
+                    regex: /\{\{img::(.*?)\}\}/g,
+                    insertText: '{{img::${1:name}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Insert image placeholder',
+                    hover: function(match) {
+                        var imageName = match[1]; // 캡처 그룹 사용
+                        return 'Image name: ' + imageName;
+                    }
+                },
+                {
+                    label: '{{random::(options)}}',
+                    regex: /\{\{random(?:::.*?)\}\}/g,
+                    insertText: '{{random::${1:option1}::${2:option2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Insert random placeholder',
+                    hover: function(match) {
+                        var options = match[0].slice(10, -2).split('::'); // 옵션 추출
+                        return 'Random options: ' + options.join(', ');
+                    }
+                },
+                {
+                    label: '{{calc::(formula)}}',
+                    regex: /\{\{calc::(.*?)\}\}/g,
+                    insertText: '{{calc::${1:formula}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Insert calculation',
+                    hover: function(match) {
+                        var formula = match[1];
+                        return 'Formula: ' + formula;
+                    }
+                },
+                {
+                    label: '{{blank}}',
+                    regex: /\{\{(blank|none)\}\}/g,
+                    insertText: '{{blank}}',
+                    detail: 'Insert blank placeholder',
+                    hover: 'Outputs nothing'
+                },
+                // 논리 연산 플레이스홀더 추가
+                {
+                    label: '{{equal::(data1)::(data2)}}',
+                    regex: /\{\{equal::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{equal::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Compare if two values are equal',
+                    hover: function(match) {
+                        return 'Equal comparison: ' + match[1] + ' == ' + match[2];
+                    }
+                },
+                {
+                    label: '{{not_equal::(data1)::(data2)}}',
+                    regex: /\{\{not_equal::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{not_equal::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Compare if two values are not equal',
+                    hover: function(match) {
+                        return 'Not Equal comparison: ' + match[1] + ' != ' + match[2];
+                    }
+                },
+                {
+                    label: '{{greater::(data1)::(data2)}}',
+                    regex: /\{\{greater::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{greater::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Check if data1 is greater than data2',
+                    hover: function(match) {
+                        return 'Greater comparison: ' + match[1] + ' > ' + match[2];
+                    }
+                },
+                {
+                    label: '{{greater_equal::(data1)::(data2)}}',
+                    regex: /\{\{greater_equal::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{greater_equal::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Check if data1 is greater than or equal to data2',
+                    hover: function(match) {
+                        return 'Greater Equal comparison: ' + match[1] + ' >= ' + match[2];
+                    }
+                },
+                {
+                    label: '{{less::(data1)::(data2)}}',
+                    regex: /\{\{less::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{less::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Check if data1 is less than data2',
+                    hover: function(match) {
+                        return 'Less comparison: ' + match[1] + ' < ' + match[2];
+                    }
+                },
+                {
+                    label: '{{less_equal::(data1)::(data2)}}',
+                    regex: /\{\{less_equal::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{less_equal::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Check if data1 is less than or equal to data2',
+                    hover: function(match) {
+                        return 'Less Equal comparison: ' + match[1] + ' <= ' + match[2];
+                    }
+                },
+                {
+                    label: '{{and::(data1)::(data2)}}',
+                    regex: /\{\{and::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{and::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Perform logical AND operation',
+                    hover: function(match) {
+                        return 'AND operation: ' + match[1] + ' AND ' + match[2];
+                    }
+                },
+                {
+                    label: '{{or::(data1)::(data2)}}',
+                    regex: /\{\{or::(.*?)::(.*?)\}\}/g,
+                    insertText: '{{or::${1:data1}::${2:data2}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Perform logical OR operation',
+                    hover: function(match) {
+                        return 'OR operation: ' + match[1] + ' OR ' + match[2];
+                    }
+                },
+                {
+                    label: '{{not::(data1)}}',
+                    regex: /\{\{not::(.*?)\}\}/g,
+                    insertText: '{{not::${1:data1}}}',
+                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    detail: 'Perform logical NOT operation',
+                    hover: function(match) {
+                        return 'NOT operation: NOT ' + match[1];
+                    }
+                },
+                // Deprecated placeholders
+                {
+                    label: '<user> (deprecated)',
+                    regex: /(<)(user)(>)/g,
+                    insertText: '<user>',
+                    detail: 'Deprecated. Use {{user}} instead.',
+                    hover: 'Deprecated. Use {{user}} instead.',
+                    deprecated: true
+                },
+                {
+                    label: '<char> (deprecated)',
+                    regex: /(<)(char)(>)/g,
+                    insertText: '<char>',
+                    detail: 'Deprecated. Use {{char}} instead.',
+                    hover: 'Deprecated. Use {{char}} instead.',
+                    deprecated: true
+                }
+            ];
+    
+            // 유틸리티 함수: 정규식 특수문자 이스케이프
+            function escapeRegExp(string) {
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+    
+            // 언어 제공자 등록 함수
+            function registerCustomLanguage() {
+                monaco.languages.register({ id: 'customLanguage' });
+    
+                // 토크나이저 설정
+                monaco.languages.setMonarchTokensProvider('customLanguage', {
+                    tokenizer: {
+                        root: [
+                            [/\{\{/, { token: 'keyword', next: '@placeholder' }],
+                            [/\{#if/, { token: 'keyword', next: '@ifblock' }],
+                            [/<(user|char)>/, [{ token: 'delimiter' }, { token: 'deprecated' }, { token: 'delimiter' }]], // Deprecated aliases
+                            [/<|>/, 'delimiter'], // 꺽쇠 기호 하이라이팅
+                            // 기타 토큰 처리
+                            [/[{}()\[\]]/, '@brackets'],
+                            [/[;,.]/, 'delimiter'],
+                            [/\d+/, 'number'],
+                            [/[a-zA-Z_$][\w$]*/, 'identifier'],
+                            [/\s+/, 'white'],
+                        ],
+    
+                        placeholder: [
+                            [/\}\}/, { token: 'keyword', next: '@pop' }],
+                            [/\{\{/, { token: 'keyword', next: '@placeholder' }], // 중첩된 플레이스홀더
+                            [/<(user|char)>/, [{ token: 'delimiter' }, { token: 'deprecated' }, { token: 'delimiter' }]], // Deprecated aliases
+                            [/<|>/, 'delimiter'], // 꺽쇠 기호 하이라이팅
+                            [/[^\{\}<]+/, 'string'], // 플레이스홀더 내용
+                        ],
+    
+                        ifblock: [
+                            [/#\}/, { token: 'keyword', next: '@pop' }], // if 블록 종료
+                            [/\{\{/, { token: 'keyword', next: '@placeholder' }], // 플레이스홀더 시작
+                            [/\{#if/, { token: 'keyword', next: '@ifblock' }], // 중첩된 if
+                            [/<(user|char)>/, [{ token: 'delimiter' }, { token: 'deprecated' }, { token: 'delimiter' }]], // Deprecated aliases
+                            [/<|>/, 'delimiter'], // 꺽쇠 기호 하이라이팅
+                            [/[{}()\[\]]/, '@brackets'], // 기타 토큰
+                            [/[;,.]/, 'delimiter'],
+                            [/\d+/, 'number'],
+                            [/[a-zA-Z_$][\w$]*/, 'identifier'],
+                            [/\s+/, 'white'],
+                            [/[^\{\}#<]+/, 'string'], // 기타 내용
+                        ],
+                    }
+                });
+    
+                // 현재 위치에 해당하는 매치를 반환하는 함수
+                function getMatchAtPosition(lineContent, position, regex) {
+                    var match;
+                    while ((match = regex.exec(lineContent)) !== null) {
+                        var startColumn = match.index + 1;
+                        var endColumn = startColumn + match[0].length;
+                        if (position.column >= startColumn && position.column <= endColumn) {
+                            return {
+                                match: match,
+                                startColumn: startColumn,
+                                endColumn: endColumn
+                            };
+                        }
+                    }
+                    return null;
+                }
+    
+                // 호버 제공자 등록
+                monaco.languages.registerHoverProvider('customLanguage', {
+                    provideHover: function (model, position) {
+                        var lineNumber = position.lineNumber;
+                        var lineContent = model.getLineContent(lineNumber);
+    
+                        var matchesAtPosition = [];
+    
+                        // 플레이스홀더 처리
+                        for (var placeholder of placeholders) {
+                            var regexSource = placeholder.regex ? placeholder.regex.source : escapeRegExp(placeholder.label).replace(/\\\(\w+\\\)/g, '(.*?)');
+                            var regex = new RegExp(regexSource, 'g');
+                            var match;
+                            while ((match = regex.exec(lineContent)) !== null) {
+                                var startColumn = match.index + 1;
+                                var endColumn = startColumn + match[0].length;
+                                if (position.column >= startColumn && position.column <= endColumn) {
+                                    matchesAtPosition.push({
+                                        match: match,
+                                        startColumn: startColumn,
+                                        endColumn: endColumn,
+                                        placeholder: placeholder
+                                    });
+                                }
+                            }
+                        }
+    
+                        // 가장 안쪽의 매치를 선택
+                        if (matchesAtPosition.length > 0) {
+                            // 매치들을 시작 위치 기준으로 정렬 (가장 안쪽 매치가 마지막에 위치)
+                            matchesAtPosition.sort(function (a, b) {
+                                return a.startColumn - b.startColumn;
+                            });
+    
+                            var result = matchesAtPosition[matchesAtPosition.length - 1]; // 가장 안쪽 매치
+    
+                            if (result.placeholder) {
+                                var hoverMessage;
+                                if (typeof result.placeholder.hover === 'function') {
+                                    hoverMessage = result.placeholder.hover(result.match);
+                                } else {
+                                    hoverMessage = result.placeholder.hover;
+                                }
+    
+                                return {
+                                    range: new monaco.Range(lineNumber, result.startColumn, lineNumber, result.endColumn),
+                                    contents: [{ value: hoverMessage }]
+                                };
+                            }
+                        }
+    
+                        return null;
+                    }
+                });
+    
+                // 자동완성 제공자 등록
+                monaco.languages.registerCompletionItemProvider('customLanguage', {
+                    triggerCharacters: ['{', '#'],
+    
+                    provideCompletionItems: function (model, position) {
+                        var textUntilPosition = model.getValueInRange({
+                            startLineNumber: position.lineNumber,
+                            startColumn: 1,
+                            endLineNumber: position.lineNumber,
+                            endColumn: position.column
+                        });
+    
+                        // 플레이스홀더 매칭 패턴
+                        var match = /{{\s*([\w:]*)$/.exec(textUntilPosition);
+                        if (match) {
+                            var prefix = match[1];
+    
+                            var suggestions = placeholders
+                                .filter(placeholder => !placeholder.deprecated && placeholder.label.startsWith('{{' + prefix))
+                                .map(placeholder => {
+                                    var alreadyTyped = '{{' + prefix;
+                                    var remainingText = placeholder.insertText.substring(alreadyTyped.length);
+    
+                                    var insertText = remainingText;
+                                    var insertTextRules = placeholder.insertTextRules || monaco.languages.CompletionItemInsertTextRule.None;
+    
+                                    return {
+                                        label: placeholder.label,
+                                        kind: monaco.languages.CompletionItemKind.Snippet,
+                                        insertText: insertText,
+                                        insertTextRules: insertTextRules,
+                                        range: {
+                                            startLineNumber: position.lineNumber,
+                                            startColumn: position.column,
+                                            endLineNumber: position.lineNumber,
+                                            endColumn: position.column
+                                        },
+                                        detail: placeholder.detail
+                                    };
+                                });
+    
+                            return { suggestions: suggestions };
+                        } else {
+                            // if 문 자동완성
+                            var ifMatch = /\{#(\w*)$/.exec(textUntilPosition);
+                            if (ifMatch) {
+                                var prefix = ifMatch[1];
+    
+                                var suggestions = [];
+                                if ('if'.startsWith(prefix)) {
+                                    suggestions.push({
+                                        label: '{#if}',
+                                        kind: monaco.languages.CompletionItemKind.Snippet,
+                                        insertText: '{#if ${1:condition}\n${2:content}\n#}',
+                                        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                                        range: new monaco.Range(
+                                            position.lineNumber,
+                                            position.column - ifMatch[1].length - 2, // '{#'의 길이만큼 조정
+                                            position.lineNumber,
+                                            position.column
+                                        ),
+                                        detail: 'Insert if statement'
+                                    });
+                                }
+    
+                                return { suggestions: suggestions };
+                            }
+                        }
+    
+                        return { suggestions: [] };
+                    }
+                });
+    
+                // 이미지 이름 자동완성 제공자 등록
+                monaco.languages.registerCompletionItemProvider('customLanguage', {
+                    triggerCharacters: ['.'],
+    
+                    provideCompletionItems: function (model, position) {
+                        var lineNumber = position.lineNumber;
+                        var lineContent = model.getLineContent(lineNumber);
+    
+                        // 커서 위치가 {{img:: 와 }} 사이인지 확인
+                        var regex = /\{\{img::(.*?)\}\}/g;
+                        var result = getMatchAtPosition(lineContent, position, regex);
+                        if (result) {
+                            var match = result.match;
+                            var startColumn = result.startColumn;
+                            var endColumn = result.endColumn;
+    
+                            if (position.column >= startColumn + 7 && position.column <= endColumn - 2) {
+                                // 이미지 이름의 접두사 추출
+                                var imageNamePrefix = model.getValueInRange({
+                                    startLineNumber: lineNumber,
+                                    startColumn: startColumn + 7, // '{{img::' 이후
+                                    endLineNumber: lineNumber,
+                                    endColumn: position.column
+                                });
+    
+                                var imagelist = model.imagelist || [];
+    
+                                var suggestions = imagelist
+                                    .filter(name => name.startsWith(imageNamePrefix))
+                                    .map(name => ({
+                                        label: name,
+                                        kind: monaco.languages.CompletionItemKind.Text,
+                                        insertText: name.substring(imageNamePrefix.length),
+                                        range: {
+                                            startLineNumber: lineNumber,
+                                            startColumn: position.column,
+                                            endLineNumber: lineNumber,
+                                            endColumn: position.column
+                                        }
+                                    }));
+    
+                                return { suggestions: suggestions };
+                            }
+                        }
+    
+                        return { suggestions: [] };
+                    }
+                });
+            }
+    
+            // 언어 제공자 등록
+            registerCustomLanguage();
+    
+            // 에디터 생성
+            var model = monaco.editor.createModel(
+                'Hello, {{user}}!\n' +
+                'Your character is {{char}}.\n' +
+                'Insert image: {{img::{{random::happy::sad}}}}\n' +
+                'Calculate: {{calc::2+2}}\n' +
+                '{#if {{equal::{{calc::2+2}}::4}}\n' +
+                '{{char}} is correct!\n' +
+                '#}\n' +
+                'Deprecated placeholders: <user>, <char>',
+                'customLanguage'
+            );
+    
+            model.imagelist = ['happy', 'sad', 'smile']; // 문서마다 다른 imagelist 설정
+    
+            var editor = monaco.editor.create(document.getElementById('editor'), {
+                model: model,
+                automaticLayout: true
+            });
+        });
+    </script>
+</body>
+</html>
