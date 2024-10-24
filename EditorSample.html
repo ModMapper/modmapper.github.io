@@ -200,7 +200,6 @@
                         root: [
                             [/\{\{/, { token: 'keyword', next: '@placeholder' }],
                             [/\{#if/, { token: 'keyword', next: '@ifblock' }],
-                            [/<(user|char)>/, [{ token: 'delimiter' }, { token: 'deprecated' }, { token: 'delimiter' }]], // Deprecated aliases
                             [/<|>/, 'delimiter'], // 꺽쇠 기호 하이라이팅
                             // 기타 토큰 처리
                             [/[{}()\[\]]/, '@brackets'],
@@ -213,7 +212,6 @@
                         placeholder: [
                             [/\}\}/, { token: 'keyword', next: '@pop' }],
                             [/\{\{/, { token: 'keyword', next: '@placeholder' }], // 중첩된 플레이스홀더
-                            [/<(user|char)>/, [{ token: 'delimiter' }, { token: 'deprecated' }, { token: 'delimiter' }]], // Deprecated aliases
                             [/<|>/, 'delimiter'], // 꺽쇠 기호 하이라이팅
                             [/[^\{\}<]+/, 'string'], // 플레이스홀더 내용
                         ],
@@ -222,7 +220,6 @@
                             [/#\}/, { token: 'keyword', next: '@pop' }], // if 블록 종료
                             [/\{\{/, { token: 'keyword', next: '@placeholder' }], // 플레이스홀더 시작
                             [/\{#if/, { token: 'keyword', next: '@ifblock' }], // 중첩된 if
-                            [/<(user|char)>/, [{ token: 'delimiter' }, { token: 'deprecated' }, { token: 'delimiter' }]], // Deprecated aliases
                             [/<|>/, 'delimiter'], // 꺽쇠 기호 하이라이팅
                             [/[{}()\[\]]/, '@brackets'], // 기타 토큰
                             [/[;,.]/, 'delimiter'],
